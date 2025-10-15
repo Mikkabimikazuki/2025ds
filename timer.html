@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>10秒タイマー</title>
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--accent:#06b6d4;--accent-done:#10b981;color-scheme: dark}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Noto Sans JP","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;background:linear-gradient(180deg,#071129 0%, #07192a 100%);color:#e6eef6}
+    .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{width:360px;max-width:96%;background:rgba(255,255,255,0.03);padding:22px;border-radius:14px;box-shadow:0 6px 24px rgba(2,6,23,0.6);text-align:center}
+    h1{margin:0 0 10px;font-size:20px}
+    .time{font-size:64px;font-weight:700;margin:8px 0;letter-spacing:2px}
+    .controls{display:flex;gap:10px;justify-content:center;margin-top:12px}
+    button{background:linear-gradient(180deg,var(--accent),#0891b2);border:none;color:#052024;padding:10px 16px;border-radius:10px;font-weight:600;cursor:pointer;box-shadow:0 6px 14px rgba(6,182,212,0.12)}
+    button[disabled]{opacity:.55;cursor:default;box-shadow:none}
+    .progress-wrap{height:12px;background:rgba(255,255,255,0.06);border-radius:999px;overflow:hidden;margin-top:18px}
+    .progress{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#7dd3fc);transition:width .1s linear}
+    .progress.done{background:linear-gradient(90deg,var(--accent-done),#34d399)}
+    .note{margin-top:10px;font-size:13px;color:#a9bfca}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="region" aria-label="10秒タイマー">
+      <h1>10秒タイマー</h1>
+      <div id="time" class="time" aria-live="polite">10</div>
+
+      <div class="controls">
+        <button id="start">開始</button>
+        <button id="stop">停止</button>
+      </div>
+
+      <div class="progress-wrap" aria-hidden="true">
+        <div id="progress" class="progress"></div>
+      </div>
+
+      <div class="note">ボタンを押すと10秒のカウントダウンを行います。</div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const DURATION = 10; // 秒
+      const startBtn = document.getElementById('start');
+      const stopBtn = document.getElementById('stop');
+      const timeEl = document.getElementById('time');
+      const progressEl = document.getElementById('progress');
+
+      let rafId = null;
+      let endTime = 0;
+
+      function formatSeconds(sec){
+        return Math.ceil(Math.max(0, sec)).toString();
+      }
+
+      function update(){
+        const now = performance.now();
+        const remaining = Math.max(0, (endTime - now) / 1000);
+        timeEl.textContent = formatSeconds(remaining);
+        const elapsed = Math.min(DURATION, DURATION - remaining);
+        const pct = (elapsed / DURATION) * 100;
+        progressEl.style.width = pct + '%';
+
+        if (remaining <= 0) {
+          finish();
+        } else {
+          rafId = requestAnimationFrame(update);
+        }
+      }
+
+      function start(){
+        if (rafId) return; // 既に動作中
+        progressEl.classList.remove('done');
+        endTime = performance.now() + DURATION * 1000;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        rafId = requestAnimationFrame(update);
+      }
+
+      function stop(){
+        if (!rafId) return;
+        cancelAnimationFrame(rafId);
+        rafId = null;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        // 時刻を10に戻す
+        timeEl.textContent = DURATION.toString();
+        progressEl.style.width = '0%';
+      }
+
+      function finish(){
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        timeEl.textContent = '0';
+        progressEl.style.width = '100%';
+        progressEl.classList.add('done');
+        playBeep();
+      }
+
+      // 短いビープ音を鳴らす（ユーザー操作で呼ばれる時のみブラウザで再生可）
+      function playBeep(){
+        try{
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.value = 880;
+          g.gain.value = 0.0001;
+          o.connect(g);
+          g.connect(ctx.destination);
+          const now = ctx.currentTime;
+          g.gain.setValueAtTime(0.0001, now);
+          g.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+          o.start(now);
+          g.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+          o.stop(now + 0.26);
+        }catch(e){
+          // AudioContext非対応や再生拒否なら静かに失敗
+          console.warn('beep failed', e);
+        }
+      }
+
+      // 初期状態
+      timeEl.textContent = DURATION.toString();
+      stopBtn.disabled = true;
+
+      startBtn.addEventListener('click', start);
+      stopBtn.addEventListener('click', stop);
+
+      // キーボードショートカット: Spaceで開始/停止トグル
+      document.addEventListener('keydown', (e)=>{
+        if (e.code === 'Space'){
+          e.preventDefault();
+          if (rafId) stop(); else start();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
